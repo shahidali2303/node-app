@@ -39,6 +39,17 @@ app.get("/customers", async (req, res) => {
   res.send(customers);
 });
 
+app.get("/customers/:id", async (req, res) => {
+  const customer = await Customer.findById(req.params.id);
+
+  if (!customer)
+    return res
+      .status(404)
+      .send("The customer with the given ID was not found.");
+
+  res.send(customer);
+});
+
 //post request
 app.post("/customers", async (req, res) => {
   validateCustomers(req.body);
@@ -87,13 +98,49 @@ app.delete("/customers/:id", async (req, res) => {
   res.send(customer);
 });
 
-app.get("/customers/:id", async (req, res) => {
-  const customer = await Customer.findById(req.params.id);
+//////////////////////////////////////////////////////////////////////////////////////////////
 
-  if (!customer)
-    return res
-      .status(404)
-      .send("The customer with the given ID was not found.");
+// Authentication starts //
 
-  res.send(customer);
+//Register user
+
+//schema by mongoose
+
+const User = new mongoose.model(
+  "User",
+  new mongoose.Schema({
+    name: { type: String, required: true, min: 1, max: 50 },
+    email: { type: String, required: true, unique: true, min: 5, max: 255 },
+    password: { type: String, required: true, min: 6, max: 255 },
+  })
+);
+//validation by joi
+function validateRegisterUser(user) {
+  const schema = {
+    name: Joi.string().min(1).max(50).required(),
+    email: Joi.string().min(1).max(255).required().email(),
+    password: Joi.string().min(6).max(255).required(),
+  };
+  return Joi.valid(user, schema);
+}
+
+app.post("/api/register", async (req, res) => {
+  validateRegisterUser(req.body);
+
+  let checkUser = await User.findOne({ email: req.body.email });
+  if (checkUser) return res.status(400).send("User already registered");
+  else {
+    let user = new User({
+      name: req.body.name,
+      email: req.body.email,
+      password: req.body.password,
+    });
+    user = await user.save();
+    res.send(user);
+  }
+});
+//register new user
+app.get("/api/register", async (req, res) => {
+  const user = await User.find().sort("name");
+  res.send(user);
 });
