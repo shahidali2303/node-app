@@ -4,6 +4,8 @@ const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
 const Joi = require("joi");
+const _ = require("lodash");
+const bcrypt = require("bcrypt");
 
 mongoose
   .connect("mongodb://0.0.0.0:27017/customers")
@@ -123,24 +125,43 @@ function validateRegisterUser(user) {
   };
   return Joi.valid(user, schema);
 }
-
+//register new user
 app.post("/api/register", async (req, res) => {
   validateRegisterUser(req.body);
 
   let checkUser = await User.findOne({ email: req.body.email });
   if (checkUser) return res.status(400).send("User already registered");
   else {
-    let user = new User({
-      name: req.body.name,
-      email: req.body.email,
-      password: req.body.password,
-    });
-    user = await user.save();
-    res.send(user);
+    let user = new User(_.pick(req.body, ["name", "email", "password"]));
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(user.password, salt);
+    await user.save();
+
+    res.send(_.pick(user, ["_id", "name", "email"]));
   }
 });
-//register new user
+//getting all user
 app.get("/api/register", async (req, res) => {
-  const user = await User.find().sort("name");
+  const user = await User.find();
   res.send(user);
+});
+
+//logging user
+function validateUser(req) {
+  const schema = {
+    email: Joi.string().min(1).max(255).required().email(),
+    password: Joi.string().min(6).max(255).required(),
+  };
+  return Joi.valid(req, schema);
+}
+
+app.post("/api/auth", async (req, res) => {
+  validateUser(req.body);
+
+  let user = await User.findOne({ email: req.body.email });
+  if (!user) return res.status(400).send("Invalid email or password ");
+  const validPassword = await bcrypt.compare(req.body.password, user.password);
+  if (!validPassword) return res.status(400).send("Invalid email or password");
+
+  res.send(true);
 });
